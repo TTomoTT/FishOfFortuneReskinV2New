@@ -762,7 +762,7 @@ class BoardQueue {
                         child.material.color.set(0xffffff); // Keep original texture colors
                         child.material.emissive.set(0x333333); // Add glow to make it "whiter"
                     } else {
-                        child.material.color.set(0x080808); // Dark tint over the texture
+                        child.material.color.set(0x333333); // Dark grey tint over the texture
                         child.material.emissive.set(0x000000);
                     }
                 } else {
@@ -863,7 +863,7 @@ class BoardQueue {
             this._attachCounter(newBoard);
             const isWhite = (this.spawnCount % 2 === 0);
             newBoard.userData.isWhiteBoard = isWhite;
-                this._applyBoardMaterial(newBoard, isWhite);
+            this._applyBoardMaterial(newBoard, isWhite);
             this.spawnCount++;
         }
 
@@ -1393,15 +1393,16 @@ function initExperience(points) {
         let boardBase = null;
         let plateBase = null;
         let fishBase = null;
-        let floorWater = null;
         let hand = null;
-        let water = null;
+        const waterObjects = [];
+        const worldOrigin = new THREE.Vector3();
         const boardBaseDefaultQuaternion = new THREE.Quaternion();
         const boardBaseDefaultRotation = new THREE.Euler();
         let boardBaseDefaultSaved = false;
         const fishBaseDefaultQuaternion = new THREE.Quaternion();
         const fishBaseDefaultRotation = new THREE.Euler();
         let fishBaseDefaultSaved = false;
+        const fishWorldOrigin = new THREE.Vector3();
         const plateWorldOrigin = new THREE.Vector3();
         const plateBaseDefaultQuaternion = new THREE.Quaternion();
         const plateBaseDefaultRotation = new THREE.Euler();
@@ -1414,7 +1415,7 @@ function initExperience(points) {
             }
 
             if (child.isMesh && (child.name === 'Floor' || child.name.toLowerCase().includes('floor'))) {
-                floorWater = new Water(
+                const floorWater = new Water(
                     child.geometry,
                     {
                         textureWidth: 512,
@@ -1461,6 +1462,7 @@ function initExperience(points) {
                 child.matrixWorld.decompose(floorWater.position, floorWater.quaternion, floorWater.scale);
                 
                 sceneManager.scene.add(floorWater);
+                waterObjects.push(floorWater);
                 child.visible = false;
             }
 
@@ -1492,12 +1494,12 @@ function initExperience(points) {
                 plateBaseDefaultSaved = true;
             }
 
-            if (child.name === 'Hand' || child.name.toLowerCase().includes('hand')) {
+            if (child.isMesh && (child.name === 'Hand' || child.name.toLowerCase().includes('hand'))) {
                 hand = child;
             }
 
-            if (child.name === 'StreamBelt' || child.name.toLowerCase().includes('streambelt')) {
-                water = new Water(
+            if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().includes('streambelt'))) {
+                const water = new Water(
                     child.geometry,
                     {
                         textureWidth: 512,
@@ -1555,7 +1557,11 @@ function initExperience(points) {
                 child.updateMatrixWorld(true);
                 child.matrixWorld.decompose(water.position, water.quaternion, water.scale);
 
+                // Slightly offset to prevent Z-fighting with the floor
+                water.position.y += 0.005;
+
                 sceneManager.scene.add(water);
+                waterObjects.push(water);
                 child.visible = false; // Hide the original static mesh
             }
         });
@@ -1566,96 +1572,129 @@ function initExperience(points) {
             boardBaseDefaultRotation.copy(boardBase.rotation);
         }
 
-        // Ensure world matrices are up to date for accurate bounding box calculation
-        glb.scene.updateMatrixWorld(true);
-        const aabb = new THREE.Box3().setFromObject(boardBase);
-        const size = new THREE.Vector3();
-        aabb.getSize(size);
-        const center = new THREE.Vector3();
-        aabb.getCenter(center);
+        // Setup Board Collider & Initialization
+        {
+            glb.scene.updateMatrixWorld(true);
+            const aabb = new THREE.Box3().setFromObject(boardBase);
+            const size = new THREE.Vector3();
+            aabb.getSize(size);
+            const center = new THREE.Vector3();
+            aabb.getCenter(center);
 
-        // Flatten the hitbox. A tall hitbox (pillar) will lean into the screen space
-        // of the boards behind it due to the slanted camera angle, causing misclicks.
-        const hitboxHeight = 0.4;
+            const hitboxHeight = 0.4;
+            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
 
-        // Add an invisible collider mesh tailored to the board's actual size.
-        const hitboxGeom = new THREE.BoxGeometry(
-            size.x * 1.8, 
-            hitboxHeight, 
-            Math.min(size.z * 1.1, 0.4) 
-        );
+            const hitboxMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff00,
+                wireframe: true,
+                transparent: true, 
+                opacity: 0, // Set to 0 to hide debugging wireframe
+                depthWrite: false 
+            });
+            const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
+            hitbox.name = 'raycast_collider';
 
-        // IMPORTANT: Three.js Raycaster ignores objects with .visible = false.
-        // We use a transparent material with 0 opacity instead to keep it clickable but hidden.
-        const hitboxMat = new THREE.MeshBasicMaterial({ 
-            color: 0x00ff00,
-            wireframe: true,
-            transparent: true, 
-            opacity: 0, // Set to 0 to hide debugging wireframe
-            depthWrite: false 
-        });
-        const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
-        hitbox.name = 'raycast_collider';
+            boardBase.worldToLocal(center);
+            hitbox.position.copy(center);
+            boardBase.add(hitbox);
 
-        boardBase.worldToLocal(center);
-        hitbox.position.copy(center);
-        
-        boardBase.add(hitbox);
+            boardBase.traverse(c => {
+                if (c.isMesh) {
+                    c.geometry.computeBoundingBox();
+                    c.geometry.computeBoundingSphere();
+                }
+            });
 
-        // Ensure bounding volumes are calculated for all parts of the board
-        boardBase.traverse(c => {
-            if (c.isMesh) {
-                c.geometry.computeBoundingBox();
-                c.geometry.computeBoundingSphere();
+            boardBase.updateMatrixWorld(true);
+            boardBase.getWorldPosition(worldOrigin);
+
+            if (boardBase && boardBase.parent) {
+                boardBase.parent.remove(boardBase);
             }
-        });
-
-        // 1. Capture the absolute world position of the board before we change the hierarchy
-        boardBase.updateMatrixWorld(true);
-        const worldOrigin = new THREE.Vector3();
-        boardBase.getWorldPosition(worldOrigin);
-
-        // 2. Detach the board template. This stops the "ghost" board from causing Z-fighting flicker.
-        if (boardBase && boardBase.parent) {
-            boardBase.parent.remove(boardBase);
         }
         
         if (fishBase) {
-            fishBase.updateMatrixWorld(true);
+            // Setup Fish Collider & Initialization
+            {
+            glb.scene.updateMatrixWorld(true);
             const aabb = new THREE.Box3().setFromObject(fishBase);
             const size = new THREE.Vector3();
             aabb.getSize(size);
             const center = new THREE.Vector3();
             aabb.getCenter(center);
 
-            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, 0.4, Math.min(size.z * 1.1, 0.4));
-            const hitboxMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+            const hitboxHeight = 0.4;
+            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
+
+            const hitboxMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff00,
+                wireframe: true,
+                transparent: true, 
+                opacity: 0, // Set to 0 to hide debugging wireframe
+                depthWrite: false 
+            });
             const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
             hitbox.name = 'raycast_collider';
+
             fishBase.worldToLocal(center);
             hitbox.position.copy(center);
             fishBase.add(hitbox);
 
-            if (fishBase.parent) fishBase.parent.remove(fishBase);
+            fishBase.traverse(c => {
+                if (c.isMesh) {
+                    c.geometry.computeBoundingBox();
+                    c.geometry.computeBoundingSphere();
+                }
+            });
+
+            fishBase.updateMatrixWorld(true);
+            fishBase.getWorldPosition(fishWorldOrigin);
+
+            if (fishBase && fishBase.parent) {
+                fishBase.parent.remove(fishBase);
+            }
+            }
         }
 
         if (plateBase) {
-            plateBase.updateMatrixWorld(true);
+            // Setup Plate Collider & Initialization
+            {
+            glb.scene.updateMatrixWorld(true);
             const aabb = new THREE.Box3().setFromObject(plateBase);
             const size = new THREE.Vector3();
             aabb.getSize(size);
             const center = new THREE.Vector3();
             aabb.getCenter(center);
 
-            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, 0.4, Math.min(size.z * 1.1, 0.4));
-            const hitboxMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+            const hitboxHeight = 0.4;
+            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
+
+            const hitboxMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff00,
+                wireframe: true,
+                transparent: true, 
+                opacity: 0, 
+                depthWrite: false 
+            });
             const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
             hitbox.name = 'raycast_collider';
+
             plateBase.worldToLocal(center);
             hitbox.position.copy(center);
             plateBase.add(hitbox);
 
+            plateBase.traverse(c => {
+                if (c.isMesh) {
+                    c.geometry.computeBoundingBox();
+                    c.geometry.computeBoundingSphere();
+                }
+            });
+
+            plateBase.updateMatrixWorld(true);
+            plateBase.getWorldPosition(plateWorldOrigin);
+
             if (plateBase.parent) plateBase.parent.remove(plateBase);
+            }
         }
 
         // 3. Add the rest of the environment (Floor, etc.)
@@ -1684,6 +1723,7 @@ function initExperience(points) {
             const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
             const cf = new CurveFollower(curve, q, ps);
             plateSystem = { q, ps, f: cf, defQuat: plateBaseDefaultQuaternion, defRot: plateBaseDefaultRotation };
+            gameSystems.push(plateSystem);
         }
 
         for (let i = 0; i < 4; i++) {
@@ -1702,15 +1742,16 @@ function initExperience(points) {
         }
 
         if (fishBase) {
+            const fishQueueOrigin = fishWorldOrigin;
             for (let i = 0; i < 4; i++) {
                 const q = new BoardQueue(
                     sceneManager.scene,
                     fishBase,
-                    queueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * (i + 4), 0, 0)),
+                    fishQueueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * (i + 4), 0, 0)),
                     queueDirection,
                     0.5,
                     3,
-                    (i + 1) % 2, // Alternating pattern offset
+                    (i + 1) % 2, // startIndex
                     true        // preserveTexture: Keep the fish texture and just tint it
                 );
                 const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
@@ -1765,19 +1806,13 @@ function initExperience(points) {
 
         function animate(timestamp) {
             const delta = sceneManager.getDelta(timestamp);
-            if (water) {
-                water.material.uniforms['time'].value += delta;
-            }
-            if (floorWater) {
-                floorWater.material.uniforms['time'].value += delta;
-            }
+            waterObjects.forEach(w => {
+                w.material.uniforms['time'].value += delta;
+            });
             gameSystems.forEach(sys => {
                 sys.q.update(delta);
                 sys.f.update(delta, sys.defQuat, sys.defRot);
             });
-            if (plateSystem) {
-                plateSystem.q.update(delta);
-            }
             arrowIndicator.update(delta);
             sceneManager.render();
             requestAnimationFrame(animate);

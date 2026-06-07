@@ -79,7 +79,7 @@ class SceneManager {
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 0.95; // Lowered to dim the overall scene
+        this.renderer.toneMappingExposure = 0.7; // Slightly lowered to balance noon light and contrast
 
         this.timer = new THREE.Timer();
 
@@ -90,7 +90,7 @@ class SceneManager {
     }
 
     _setupCamera() {
-        const frustumSize = 4.5; // Lowered from 6 to zoom in and fill the screen vertically
+        const frustumSize = 5.0; // Increased to prevent objects being cut off at screen edges
         const aspect = this.sizes.width / this.sizes.height;
 
         this.camera = new THREE.OrthographicCamera(
@@ -116,7 +116,7 @@ class SceneManager {
         // 1. High-angle Main Light (Sun)
         // The image has short but distinct shadows pointing down and slightly left.
         // We position the light high, slightly to the front and right side.
-        const sun = new THREE.DirectionalLight(0xffaa00, 2); // Warm summer orange
+        const sun = new THREE.DirectionalLight(0xffffff, 4.2); // Bright white noon sun
         sun.castShadow = true;
         sun.position.set(5, 12, 1); 
         
@@ -145,7 +145,7 @@ class SceneManager {
         // A HemisphereLight creates a beautiful sky/ground ambient blend.
         const ambientSkyColor = 0xdce2f0;   // Clean bright sky blue
         const ambientGroundColor = 0x5a557a; // Soft purple-gray shadow filler
-        const ambientLight = new THREE.HemisphereLight(ambientSkyColor, ambientGroundColor, 0.9); // Dimmed the fill light to increase contrast
+        const ambientLight = new THREE.HemisphereLight(ambientSkyColor, ambientGroundColor, 1.3); // Ambient fill for shadows
         this.scene.add(ambientLight);
     }
 
@@ -155,7 +155,7 @@ class SceneManager {
             this.sizes.height = window.innerHeight;
             const aspect = this.sizes.width / this.sizes.height;
 
-            const frustumSize = 4.5;
+            const frustumSize = 5.0;
             this.camera.left = (frustumSize * aspect) / -2;
             this.camera.right = (frustumSize * aspect) / 2;
             this.camera.top = frustumSize / 2;
@@ -695,7 +695,7 @@ class ProjectileSystem {
 // =========================
 
 class BoardQueue {
-    constructor(scene, templateBoard, queueOrigin, queueDirection, spacing = 0.5, initialCount = 4, startIndex = 0) {
+    constructor(scene, templateBoard, queueOrigin, queueDirection, spacing = 0.5, initialCount = 4, startIndex = 0, preserveTexture = false) {
         this.scene = scene;
 
         this.templateBoard = templateBoard;
@@ -709,9 +709,10 @@ class BoardQueue {
         this.queueOrigin = queueOrigin.clone();
         this.queueDirection = queueDirection.clone().normalize();
         this.spacing = spacing;
+        this.preserveTexture = preserveTexture;
 
         this.blackMaterial = new THREE.MeshPhysicalMaterial({
-            color: 0x111111,
+            color: 0x080808, // Darkened to look almost black
             roughness: 0.4,
             metalness: 0.02
         });
@@ -751,12 +752,22 @@ class BoardQueue {
         board.userData.counter = counter;
     }
 
-    _applyBoardMaterial(board, material) {
-        // Use a unique material instance for each board if you plan to animate colors,
-        // but sharing the class materials (blackMaterial/whiteMaterial) is fine for static colors.
+    _applyBoardMaterial(board, isWhite) {
         board.traverse(child => {
             if (child.isMesh && child.name !== 'raycast_collider' && child.name !== 'shot_counter') {
-                child.material = material;
+                if (this.preserveTexture) {
+                    // Clone the original material to keep the texture, but tint the color
+                    child.material = child.material.clone();
+                    if (isWhite) {
+                        child.material.color.set(0xffffff); // Keep original texture colors
+                        child.material.emissive.set(0x333333); // Add glow to make it "whiter"
+                    } else {
+                        child.material.color.set(0x080808); // Dark tint over the texture
+                        child.material.emissive.set(0x000000);
+                    }
+                } else {
+                    child.material = isWhite ? this.whiteMaterial : this.blackMaterial;
+                }
             }
         });
     }
@@ -773,8 +784,7 @@ class BoardQueue {
                 this._attachCounter(boardClone);
                 const isWhite = (this.spawnCount % 2 === 0);
                 boardClone.userData.isWhiteBoard = isWhite;
-                const material = isWhite ? this.whiteMaterial : this.blackMaterial;
-                this._applyBoardMaterial(boardClone, material);
+                this._applyBoardMaterial(boardClone, isWhite);
                 this.spawnCount++;
             }
 
@@ -853,8 +863,7 @@ class BoardQueue {
             this._attachCounter(newBoard);
             const isWhite = (this.spawnCount % 2 === 0);
             newBoard.userData.isWhiteBoard = isWhite;
-            const material = isWhite ? this.whiteMaterial : this.blackMaterial;
-            this._applyBoardMaterial(newBoard, material);
+                this._applyBoardMaterial(newBoard, isWhite);
             this.spawnCount++;
         }
 
@@ -1379,15 +1388,20 @@ function initExperience(points) {
 
     const loader = new GLTFLoader();
 
-    loader.load('./GameObjects/FishTank.glb', (glb) => {
+    loader.load('GameObjects/FishTank.glb', (glb) => {
         console.log('Main model loaded successfully.');
         let boardBase = null;
         let plateBase = null;
+        let fishBase = null;
+        let floorWater = null;
         let hand = null;
         let water = null;
         const boardBaseDefaultQuaternion = new THREE.Quaternion();
         const boardBaseDefaultRotation = new THREE.Euler();
         let boardBaseDefaultSaved = false;
+        const fishBaseDefaultQuaternion = new THREE.Quaternion();
+        const fishBaseDefaultRotation = new THREE.Euler();
+        let fishBaseDefaultSaved = false;
         const plateWorldOrigin = new THREE.Vector3();
         const plateBaseDefaultQuaternion = new THREE.Quaternion();
         const plateBaseDefaultRotation = new THREE.Euler();
@@ -1399,12 +1413,70 @@ function initExperience(points) {
                 child.receiveShadow = true;
             }
 
+            if (child.isMesh && (child.name === 'Floor' || child.name.toLowerCase().includes('floor'))) {
+                floorWater = new Water(
+                    child.geometry,
+                    {
+                        textureWidth: 512,
+                        textureHeight: 512,
+                        waterNormals: new THREE.TextureLoader().load('GameObjects/waternormals.jpg', (texture) => {
+                            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                        }),
+                        sunDirection: sceneManager.sun.position.clone().normalize(),
+                        sunColor: 0xffffff,
+                        waterColor: 0x99e5ff,
+                        distortionScale: 7.0,
+                        fog: sceneManager.scene.fog !== undefined,
+                        alpha: 0.6,
+                        side: THREE.DoubleSide
+                    }
+                );
+
+                // Copy UV-based flow logic from StreamBelt
+                floorWater.material.onBeforeCompile = (shader) => {
+                    shader.vertexShader = shader.vertexShader.replace(
+                        'varying vec4 worldPosition;',
+                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
+                    );
+                    shader.vertexShader = shader.vertexShader.replace(
+                        'void main() {',
+                        'void main() {\nvUv = uv;'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'varying vec4 worldPosition;',
+                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'vec4 noise = getNoise( worldPosition.xz * size );',
+                        'vec4 noise = getNoise( vUv * size );'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103.0/g, 'uv * -0.1');
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107.0/g, 'uv * -0.1');
+                };
+
+                floorWater.material.transparent = true;
+                floorWater.material.uniforms['size'].value = 4.0;
+
+                child.updateMatrixWorld(true);
+                child.matrixWorld.decompose(floorWater.position, floorWater.quaternion, floorWater.scale);
+                
+                sceneManager.scene.add(floorWater);
+                child.visible = false;
+            }
+
             // Identify the board object. If the board is a group in the GLTF, we want the group.
             if (!boardBaseDefaultSaved && (child.name === 'Board' || child.name.toLowerCase().includes('board'))) {
                 boardBase = child;
                 boardBaseDefaultQuaternion.copy(boardBase.quaternion);
                 boardBaseDefaultRotation.copy(boardBase.rotation);
                 boardBaseDefaultSaved = true;
+            }
+
+            if (!fishBaseDefaultSaved && (child.name === 'Fish' || child.name.toLowerCase().includes('fish'))) {
+                fishBase = child;
+                fishBaseDefaultQuaternion.copy(fishBase.quaternion);
+                fishBaseDefaultRotation.copy(fishBase.rotation);
+                fishBaseDefaultSaved = true;
             }
 
             if (!plateBaseDefaultSaved && (child.name === 'Plate' || child.name.toLowerCase().includes('plate'))) {
@@ -1430,11 +1502,11 @@ function initExperience(points) {
                     {
                         textureWidth: 512,
                         textureHeight: 512,
-                        waterNormals: new THREE.TextureLoader().load('./GameObjects/waternormals.jpg', (texture) => {
+                        waterNormals: new THREE.TextureLoader().load('GameObjects/waternormals.jpg', (texture) => {
                             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                         }),
                         sunDirection: sceneManager.sun.position.clone().normalize(),
-                        sunColor: 0xffaa00, // Warm orange highlights for cartoon look
+                        sunColor: 0xffffff, // Pure white highlights for 12h noon sun
                         waterColor: 0x99e5ff, // Brighter, more saturated cyan for a tropical cartoon look
                         distortionScale: 7.0, // Increased for more energetic ripples
                         fog: sceneManager.scene.fog !== undefined,
@@ -1548,6 +1620,24 @@ function initExperience(points) {
             boardBase.parent.remove(boardBase);
         }
         
+        if (fishBase) {
+            fishBase.updateMatrixWorld(true);
+            const aabb = new THREE.Box3().setFromObject(fishBase);
+            const size = new THREE.Vector3();
+            aabb.getSize(size);
+            const center = new THREE.Vector3();
+            aabb.getCenter(center);
+
+            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, 0.4, Math.min(size.z * 1.1, 0.4));
+            const hitboxMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+            const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
+            hitbox.name = 'raycast_collider';
+            fishBase.worldToLocal(center);
+            hitbox.position.copy(center);
+            fishBase.add(hitbox);
+
+            if (fishBase.parent) fishBase.parent.remove(fishBase);
+        }
 
         if (plateBase) {
             plateBase.updateMatrixWorld(true);
@@ -1611,6 +1701,24 @@ function initExperience(points) {
             gameSystems.push({ q, ps, f: cf, defQuat: boardBaseDefaultQuaternion, defRot: boardBaseDefaultRotation });
         }
 
+        if (fishBase) {
+            for (let i = 0; i < 4; i++) {
+                const q = new BoardQueue(
+                    sceneManager.scene,
+                    fishBase,
+                    queueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * (i + 4), 0, 0)),
+                    queueDirection,
+                    0.5,
+                    3,
+                    (i + 1) % 2, // Alternating pattern offset
+                    true        // preserveTexture: Keep the fish texture and just tint it
+                );
+                const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
+                const cf = new CurveFollower(curve, q, ps, plateSystem);
+                gameSystems.push({ q, ps, f: cf, defQuat: fishBaseDefaultQuaternion, defRot: fishBaseDefaultRotation });
+            }
+        }
+
         const textureLoader = new THREE.TextureLoader();
         const arrowTexture = textureLoader.load('/GameObjects/arrow.png');
         const arrowIndicator = new ArrowIndicator(sceneManager.scene, curve, arrowTexture, ARROW_SETTINGS.count);
@@ -1660,6 +1768,9 @@ function initExperience(points) {
             if (water) {
                 water.material.uniforms['time'].value += delta;
             }
+            if (floorWater) {
+                floorWater.material.uniforms['time'].value += delta;
+            }
             gameSystems.forEach(sys => {
                 sys.q.update(delta);
                 sys.f.update(delta, sys.defQuat, sys.defRot);
@@ -1674,8 +1785,8 @@ function initExperience(points) {
 
         animate();
     }, undefined, (error) => {
-        console.error('CRITICAL ERROR: Could not load FishTank.glb');
-        console.error('Check if the file is named correctly and is in the same folder as index.html');
+        console.error('CRITICAL ERROR: Could not load FishTank.glb', error);
+        console.warn('Verify that GameObjects/FishTank.glb exists relative to your project root.');
     });
 }
 

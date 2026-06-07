@@ -762,7 +762,7 @@ class BoardQueue {
                         child.material.color.set(0xffffff); // Keep original texture colors
                         child.material.emissive.set(0x333333); // Add glow to make it "whiter"
                     } else {
-                        child.material.color.set(0x333333); // Dark grey tint over the texture
+                        child.material.color.set(0x888888); // Moderate grey tint to darken the texture
                         child.material.emissive.set(0x000000);
                     }
                 } else {

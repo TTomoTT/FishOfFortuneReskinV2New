@@ -19,11 +19,16 @@ export function registerMessageHandler(handler) {
       if (result && typeof result.then === 'function') {
         result
           .then(res => {
+            // Only attempt to send if the extension context is still valid
+            if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
+            
             // If we returned true, we MUST call sendResponse.
             // We send null if res is undefined to satisfy Chrome's requirement.
             sendResponse(res !== undefined ? res : null);
           })
           .catch(err => {
+            if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
+            
             sendResponse({ error: err?.message || String(err) || 'Async handler error' });
           });
         return true; // Keep the message channel open for the async response

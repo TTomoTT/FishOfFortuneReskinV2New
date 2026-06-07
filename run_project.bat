@@ -1,0 +1,3 @@
+@echo off
+echo Starting Vite Dev Server...
+npx vite --open

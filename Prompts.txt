@@ -1,0 +1,86 @@
+it loads only one impact sound per burs. I need impact sound every time projectile hists checkerboard
+
+Audio Logic: It loads only one impact sound per burst. I need impact sound every time a projectile hits the checkerboard.
+Visibility: I need to hide the curve path.
+Visual Cleanup: How can I hide the sun's white and orange ray lines?
+Portability: When I click run_project on another PC, it doesn't load.
+Dependency Errors: I can run_project.bat it in an integrated browser, but I have index.html:1 Uncaught TypeError: Failed to resolve module specifier "three".
+Protocol/CORS Errors: How to create a dist folder? If I click on index.html directly, I get CORS policy errors.
+Live Reload Errors: I still have the same error index.html:43 Live reload enabled.
+Color Issues: Why are colors way dimmer when I launch the game over a run_project.bat file?
+Lighting Implementation: Implement specific _setupLights() logic (Sun directional light and Hemisphere ambient light).
+Contrast Adjustment: It is too bright and I can't see arrows; I need to dim it and add some contrast.
+
+1. I need to hide curve path
+
+2. hwo can I hide sun white and orange ray line
+
+3. when I click run_project on another PC it doesn't load
+
+4. I can run_project.bat it in integratged browser I have index.html:1 Uncaught TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+
+5. how to create dist folder if I click on index.html directly in folder ThreeProject I got errors index.html:1 Access to script at 'file:///C:/Tomislav/ThreeProject/main.js' from origin 'null' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome-extension, chrome-untrusted, data, edge, http, https, isolated-app.
+main.js:1  Failed to load resource: net::ERR_FAILED
+index.html:1 Unsafe attempt to load URL file:///C:/Tomislav/ThreeProject/index.html from frame with URL file:///C:/Tomislav/ThreeProject/index.html. 'file:' URLs are treated as unique security origins.
+
+6. i still have a same error index.html:43 Live reload enabled.
+index.html:1 Uncaught TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+
+7. why are collors way dimmer when I lunch game over a run_project.bat file
+
+8. collors are still dim and I got error index.html:43 Live reload enabled.
+index.html:1 Uncaught TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+
+9. Implement this lighting _setupLights() {
+    // 1. High-angle Main Light (Sun)
+    // The image has short but distinct shadows pointing down and slightly left.
+    // We position the light high, slightly to the front and right side.
+    const sun = new THREE.DirectionalLight(0xffffff, 4.5); // Boost intensity for that bright white look
+    sun.castShadow = true;
+    sun.position.set(5, 12, 6); 
+    
+    // 2. Optimized Soft Shadow Map Settings
+    // Tighten the shadow camera view area to cover just your board. 
+    // This stops shadows from looking pixelated or vanishing.
+    sun.shadow.mapSize.width = 2048; // Higher res for clean block edges
+    sun.shadow.mapSize.height = 2048;
+    
+    // Tighten the shadow camera frustum bounds (Adjust numbers based on your board size)
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 25;
+    sun.shadow.camera.left = -10;
+    sun.shadow.camera.right = 10;
+    sun.shadow.camera.top = 10;
+    sun.shadow.camera.bottom = -10;
+    
+    // Smooth out jagged shadow edges
+    sun.shadow.bias = -0.0005; 
+    sun.shadow.normalBias = 0.05; 
+    this.scene.add(sun);
+
+    // 3. Stylized Soft Ambient Fill Light
+    // The shadows in your screenshot aren't pitch black; they have a soft, purple-blue tint.
+    // A HemisphereLight creates a beautiful sky/ground ambient blend.
+    const ambientSkyColor = 0xdce2f0;   // Clean bright sky blue
+    const ambientGroundColor = 0x5a557a; // Soft purple-gray shadow filler
+    const ambientLight = new THREE.HemisphereLight(ambientSkyColor, ambientGroundColor, 1.8);
+    this.scene.add(ambientLight);
+}
+
+
+
+9. Implement this lighting _setupLights() {
+
+10. it is to bright and I cant see arrows I need to dim it and add some contrast
+
+11. Isolation: I just don't want recoil from Board to be transfer on Plate.
+
+12. Animation Correction: Plate needs to jump from Plate queue to curve path independently. Plate was attached to Board on jump; I don't want that.
+
+13. Win Condition & UI: Detect when there are no checkerboards, display "YOU WON" and a "Start Again" button that reloads the page.
+
+14. Portability: Make the game run on any PC from local files without Node.js or Python using a batch file.
+
+15. Security & Stability: Fix the "Unsafe attempt to load URL" error and the "console closing immediately" issue in the batch launcher.
+
+16. Prompt Export: Find my entire chat history prompts and export it to a txt file.

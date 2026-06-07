@@ -1,0 +1,30 @@
+{
+  "name": "threeproject",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TTomoTT/ThreeProject.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/TTomoTT/ThreeProject/issues"
+  },
+  "homepage": "https://github.com/TTomoTT/ThreeProject#readme",
+  "dependencies": {
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "vite": "^8.0.16",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

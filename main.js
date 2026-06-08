@@ -214,7 +214,7 @@ function createRoundedBoxGeometry(width, height, depth, radius, segments = 12) {
 function applyOutline(object, thickness = 0.01) {
     if (!object) return;
     object.traverse((child) => {
-        if (child.isMesh && !child.name.includes('outline') && child.name !== 'raycast_collider' && child.name !== 'shot_counter') {
+        if (child.isMesh && !child.name.includes('outline') && child.name !== 'raycast_collider' && child.name !== 'shot_counter' && child.name !== 'Plate' && !child.name.toLowerCase().includes('plate')) {
             const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
             outlineMat.onBeforeCompile = (shader) => {
                 shader.uniforms.thickness = { value: thickness };
@@ -1478,91 +1478,14 @@ function initExperience(points) {
 
             // --- PLATE WHIRLWIND WATER SHADER ---
             // --- PLATE WHIRLWIND WATER SHADER ---
-if (!plateBaseDefaultSaved && (child.name === 'Plate' || child.name.toLowerCase().includes('plate'))) {
-    const water = new Water(
-        child.geometry,
-        {
-            textureWidth: 512,
-            textureHeight: 512,
-            waterNormals: new THREE.TextureLoader().load('GameObjects/waternormals.jpg', (texture) => {
-                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-            }),
-            sunDirection: sceneManager.sun.position.clone().normalize(),
-            sunColor: 0xffffff,
-            waterColor: 0x99e5ff,
-            distortionScale: 4.0,
-            fog: sceneManager.scene.fog !== undefined,
-            alpha: 0.8,
-            side: THREE.DoubleSide
-        }
-    );
+// --- PLATE TRANSPARENT VORTEX WATER SHADER ---
+            if (!plateBaseDefaultSaved && (child.name === 'Plate' || child.name.toLowerCase().includes('plate'))) {
+                plateBase = child;
+                plateBaseDefaultQuaternion.copy(plateBase.quaternion);
+                plateBaseDefaultRotation.copy(plateBase.rotation);
+                plateBaseDefaultSaved = true;
+            }
 
-    water.material.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader.replace(
-            'varying vec4 worldPosition;',
-            'varying vec4 worldPosition;\nvarying vec2 vUv;' // <-- Removed duplicate 'attribute vec2 uv;'
-        );
-        shader.vertexShader = shader.vertexShader.replace(
-            'void main() {',
-            'void main() {\nvUv = uv;'
-        );
-        shader.fragmentShader = shader.fragmentShader.replace(
-            'varying vec4 worldPosition;',
-            'varying vec4 worldPosition;\nvarying vec2 vUv;'
-        );
-        shader.fragmentShader = shader.fragmentShader.replace(
-            'vec4 noise = getNoise( worldPosition.xz * size );',
-            `
-            vec2 uvSwirl = vUv - 0.5;
-            float dist = length(uvSwirl);
-            float angle = atan(uvSwirl.y, uvSwirl.x);
-            float swirl = angle + (2.5 / (dist + 0.1)) + time * 35.0;
-            float radialFlow = dist - time * 0.4; 
-            vec2 swirledUv = vec2(cos(swirl), sin(swirl)) * radialFlow + 0.5;
-            vec4 noise = getNoise( swirledUv * size );
-            `
-        );
-        shader.fragmentShader = shader.fragmentShader.replace(
-            'gl_FragColor = vec4( albedo, alpha );',
-            `
-            float foam = smoothstep(0.12, 0.38, noise.r);
-            float core = smoothstep(0.35, 0.0, dist);
-            
-            vec3 cyanBase = waterColor * 2.5; 
-            vec3 emissiveWhirl = mix(cyanBase, vec3(35.0), foam); 
-            emissiveWhirl += core * vec3(20.0, 45.0, 55.0);    
-            
-            float finalAlpha = clamp(foam * 0.9 + core * 1.0 + 0.05, 0.0, 1.0) * alpha;
-            gl_FragColor = vec4( emissiveWhirl, finalAlpha );
-            `
-        );
-        shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103\.0/g, 'uv * -0.1');
-        shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107\.0/g, 'uv * -0.1');
-    };
-
-    water.material.transparent = true;
-    water.material.depthWrite = false; 
-    water.name = child.name;
-    water.material.uniforms['size'].value = 1.4;
-
-    child.updateMatrixWorld(true);
-    child.matrixWorld.decompose(water.position, water.quaternion, water.scale);
-
-    plateBase = water;
-    plateBase.receiveShadow = false;
-    plateBase.castShadow = false;
-    waterObjects.push(plateBase); 
-
-    plateBase.updateMatrixWorld(true);
-    plateBase.getWorldPosition(plateWorldOrigin);
-    
-    plateBase = child;
-    plateBaseDefaultQuaternion.copy(plateBase.quaternion);
-    plateBaseDefaultRotation.copy(plateBase.rotation);
-    plateBaseDefaultSaved = true;
-
-    child.visible = false; 
-}
 
             if (child.isMesh && (child.name === 'Hand' || child.name.toLowerCase().includes('hand'))) {
                 hand = child;
@@ -1758,8 +1681,6 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
             hitbox.position.copy(center);
             plateBase.add(hitbox);
 
-            applyOutline(plateBase, 0.008);
-
             plateBase.traverse(c => {
                 if (c.isMesh) {
                     c.geometry.computeBoundingBox();
@@ -1800,33 +1721,18 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
             gameSystems.push(plateSystem);
         }
 
-        for (let i = 0; i < 4; i++) {
-            const q = new BoardQueue(
-                sceneManager.scene,
-                boardBase,
-                queueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * i, 0, 0)),
-                queueDirection,
-                0.5,
-                3, 
-                i % 2 
-            );
-            const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
-            const cf = new CurveFollower(curve, q, ps, plateSystem);
-            gameSystems.push({ q, ps, f: cf, defQuat: boardBaseDefaultQuaternion, defRot: boardBaseDefaultRotation });
-        }
-
         if (fishBase) {
             const fishQueueOrigin = fishWorldOrigin;
             for (let i = 0; i < 4; i++) {
                 const q = new BoardQueue(
                     sceneManager.scene,
                     fishBase,
-                    fishQueueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * (i + 4), 0, 0)),
+                    fishQueueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * i, 0, 0)),
                     queueDirection,
                     0.5,
                     3,
-                    (i + 2) % 2, 
-                    true        
+                    i % 2, 
+                    false        
                 );
                 const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
                 const cf = new CurveFollower(curve, q, ps, plateSystem);

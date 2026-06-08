@@ -1437,7 +1437,7 @@ function initExperience(points) {
                             vec3 waterColor = mix(uColorDeep, uColorShallow, combinedNoise);
 
                             // Create sharp cell-shaded stylized wave foam thresholds 
-                            float foamCutoff = 0.56;
+                            float foamCutoff = 0.9;
                             float foamWidth = 0.03;
                             float foamEdge = smoothstep(foamCutoff, foamCutoff + foamWidth, combinedNoise);
                             
@@ -1539,7 +1539,7 @@ function initExperience(points) {
                             float combinedNoise = (n1 + n2) * 0.5;
                             
                             // Create repeating wave lines
-                            float wave = sin((dot(vUv, waveDir) * 20.0 - time * 2.0) + combinedNoise * 2.0) * 0.5 + 0.5;
+                            float wave = sin((dot(vUv, waveDir) * 20.0 - time * -2.0) + combinedNoise * 2.0) * 0.5 + 0.5;
 
                             // Calculate stylized water baseline gradient mapping
                             vec3 waterColor = mix(uColorDeep, uColorShallow, wave);
@@ -1551,7 +1551,8 @@ function initExperience(points) {
 
                             vec3 finalColor = mix(waterColor, uColorFoam, foamEdge);
 
-                            gl_FragColor = vec4(finalColor, 0.9);
+                            // Adjust this alpha value (0.0 to 1.0) for more/less transparency
+                            gl_FragColor = vec4(finalColor, 0.5);
                         }
                     `,
                     transparent: true,

@@ -727,7 +727,7 @@ class BoardQueue {
         if (this.isPlate) {
             this.queueCounter = createShotCounter(initialCount, true);
             // Position it at the queue origin, slightly elevated above the surface
-            this.queueCounter.mesh.position.copy(this.queueOrigin).add(new THREE.Vector3(0, 0.3, 0.4));
+            this.queueCounter.mesh.position.copy(this.queueOrigin).add(new THREE.Vector3(0, 0.6, 0.4));
             this.scene.add(this.queueCounter.mesh);
         }
 
@@ -1775,7 +1775,7 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
 
         const queueOrigin = worldOrigin;
         const queueDirection = new THREE.Vector3(0, 0, 1);
-        const plateQueueDirection = new THREE.Vector3(-0.6, 0, 0);
+        const plateQueueDirection = new THREE.Vector3(0, 1, 0);
         
         const gameSystems = [];
         const interQueueSpacing = 0.42;
@@ -1787,7 +1787,7 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
                 plateBase,
                 plateWorldOrigin,
                 plateQueueDirection,
-                0.2,
+                0.05,
                 5, 
                 0
             );

@@ -249,7 +249,7 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
         depthWrite: false 
     });
 
-    const smallSize = tileWidth * 0.35;
+    const smallSize = tileWidth * 0.8;
     const cubeHeight = smallSize * 2; 
     const gap = tileWidth * 0.01;
     const offsetAmount = (smallSize / 2) + (gap / 2);
@@ -258,15 +258,20 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
     const cubes = [];
 
     const offsets = [-offsetAmount, offsetAmount];
-    for (let r = -6; r < rows; r++) {
+    for (let r = -3; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            const isWhite = ((r + c) % 2 === 0);
             const baseX = startX + c * spacing;
             const baseZ = startZ + r * spacing;
             const extraLift = 0;
 
             for (let sr = 0; sr < 2; sr++) {
                 for (let sc = 0; sc < 2; sc++) {
+                    // Randomize density: only ~30% chance to spawn an object
+                    if (Math.random() > 0.3) continue;
+
+                    // Randomize team (WhiteFly or BlackBug)
+                    const isWhite = Math.random() > 0.5;
+
                     const offsetX = offsets[sc];
                     const offsetZ = offsets[sr];
                     const mesh = new THREE.Mesh(smallGeom, hitboxMat);
@@ -462,8 +467,8 @@ class ProjectileSystem {
         
         for (let i = 0; i < particleCount; i++) {
             const material = new THREE.MeshStandardMaterial({
-                color: 0xffaa00,
-                emissive: 0xff4400,
+                color: 0x00aaff, // Vibrant blue color
+                emissive: 0x0044ff, // Deep blue emissive glow
                 transparent: true,
                 roughness: 0.5,
                 metalness: 0.5
@@ -501,8 +506,8 @@ class ProjectileSystem {
 
         for (let i = 0; i < count; i++) {
             const sphereMaterial = new THREE.MeshStandardMaterial({
-                color:  0xffffff,
-                emissive: 0xffffff,
+                color:  0x00aaff, // Vibrant blue color
+                emissive: 0x0044ff, // Deep blue emissive glow
                 metalness: 0.6,
                 roughness: 0.3,
                 transparent: true,
@@ -1846,7 +1851,61 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
 
         const inputController = new InputController(sceneManager, hand);
 
+        let isGameStarted = false;
+
+        // Create Start Game UI Overlay
+        const startOverlay = document.createElement('div');
+        startOverlay.id = 'start-overlay';
+        startOverlay.style.position = 'fixed';
+        startOverlay.style.top = '0';
+        startOverlay.style.left = '0';
+        startOverlay.style.width = '100%';
+        startOverlay.style.height = '100%';
+        startOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+        startOverlay.style.display = 'flex';
+        startOverlay.style.flexDirection = 'column';
+        startOverlay.style.justifyContent = 'center';
+        startOverlay.style.alignItems = 'center';
+        startOverlay.style.zIndex = '1000';
+        startOverlay.style.fontFamily = 'sans-serif';
+
+        const description = document.createElement('p');
+        description.innerHTML = 'Shoot <b>White Flies</b> with a white fish<br>and shoot <b>Black Bugs</b> with a black fish';
+        description.style.color = '#ffffff';
+        description.style.fontSize = '24px';
+        description.style.marginBottom = '30px';
+        description.style.textAlign = 'center';
+        description.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+        startOverlay.appendChild(description);
+
+        const startBtn = document.createElement('button');
+        startBtn.innerText = 'Start Game';
+        startBtn.style.padding = '20px 50px';
+        startBtn.style.fontSize = '32px';
+        startBtn.style.cursor = 'pointer';
+        startBtn.style.backgroundColor = '#ff9800';
+        startBtn.style.color = 'white';
+        startBtn.style.border = 'none';
+        startBtn.style.borderRadius = '50px';
+        startBtn.style.fontWeight = 'bold';
+        startBtn.style.boxShadow = '0 10px 20px rgba(0,0,0,0.5)';
+        startBtn.style.transition = 'transform 0.2s';
+        startBtn.onmouseenter = () => startBtn.style.transform = 'scale(1.05)';
+        startBtn.onmouseleave = () => startBtn.style.transform = 'scale(1)';
+
+        startBtn.onclick = () => {
+            document.body.removeChild(startOverlay);
+            if (sceneManager.audioListener.context.state === 'suspended') {
+                sceneManager.audioListener.context.resume();
+            }
+            isGameStarted = true;
+        };
+
+        startOverlay.appendChild(startBtn);
+        document.body.appendChild(startOverlay);
+
         sceneManager.canvas.addEventListener('click', (event) => {
+            if (!isGameStarted) return;
             if (event.button !== 0) return;
 
             if (sceneManager.audioListener.context.state === 'suspended') {
@@ -1885,11 +1944,13 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
             waterObjects.forEach(w => {
                 w.material.uniforms['time'].value += delta;
             });
-            gameSystems.forEach(sys => {
-                sys.q.update(delta);
-                sys.f.update(delta, sys.defQuat, sys.defRot);
-            });
-            arrowIndicator.update(delta);
+            if (isGameStarted) {
+                gameSystems.forEach(sys => {
+                    sys.q.update(delta);
+                    sys.f.update(delta, sys.defQuat, sys.defRot);
+                });
+                arrowIndicator.update(delta);
+            }
             sceneManager.render();
             requestAnimationFrame(animate);
         }

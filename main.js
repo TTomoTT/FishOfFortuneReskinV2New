@@ -353,6 +353,7 @@ class ProjectileSystem {
         this.audioListener = audioListener;
         this.projectiles = [];
         this.particles = [];
+        this.dyingTargets = [];
         this.spatialGrid = new Map();
         this.gridCellSize = 0.5; 
 
@@ -467,8 +468,8 @@ class ProjectileSystem {
         
         for (let i = 0; i < particleCount; i++) {
             const material = new THREE.MeshStandardMaterial({
-                color: 0x00aaff, // Vibrant blue color
-                emissive: 0x0044ff, // Deep blue emissive glow
+                color: 0xffaa00,
+                emissive: 0xff4400,
                 transparent: true,
                 roughness: 0.5,
                 metalness: 0.5
@@ -506,8 +507,8 @@ class ProjectileSystem {
 
         for (let i = 0; i < count; i++) {
             const sphereMaterial = new THREE.MeshStandardMaterial({
-                color:  0x00aaff, // Vibrant blue color
-                emissive: 0x0044ff, // Deep blue emissive glow
+                color:  0xffffff,
+                emissive: 0xffffff,
                 metalness: 0.6,
                 roughness: 0.3,
                 transparent: true,
@@ -544,7 +545,9 @@ class ProjectileSystem {
                 ),
                 lifetime: 4,
                 age: 0,
-                isWhite: board.userData.isWhiteBoard
+                isWhite: board.userData.isWhiteBoard,
+                isWhite: board.userData.isWhiteBoard,
+                sourceBoard: board
             });
 
             this.scene.add(sphere);
@@ -610,7 +613,16 @@ class ProjectileSystem {
                         if (distSq < 0.1225) {
                             if (proj.isWhite === cube.userData.isWhite) {
                                 this._createExplosion(cube.position.clone());
-                                this.checkerboardGroup.remove(cube);
+                                this.scene.attach(cube); // Keep it visible and attach to scene for world-space lerping
+                                
+                                this.dyingTargets.push({
+                                    mesh: cube,
+                                    targetBoard: proj.sourceBoard,
+                                    age: 0,
+                                    lifetime: 0.3, // Time in seconds it takes to reach the fish
+                                    startPos: cube.position.clone(),
+                                    startScale: cube.scale.clone()
+                                });
                                 
                                 const masterCubes = this.checkerboardGroup.userData.cubes;
                                 const idx = masterCubes.indexOf(cube);
@@ -662,6 +674,26 @@ class ProjectileSystem {
                 p.mesh.geometry.dispose();
                 p.mesh.material.dispose();
                 this.particles.splice(i, 1);
+            }
+        }
+
+        for (let i = this.dyingTargets.length - 1; i >= 0; i--) {
+            const target = this.dyingTargets[i];
+            target.age += delta;
+            const t = Math.min(target.age / target.lifetime, 1);
+            const ease = t * t; // Accelerating curve for a suction effect
+            
+            if (target.targetBoard) {
+                target.mesh.position.lerpVectors(target.startPos, target.targetBoard.position, ease);
+            }
+            
+            target.mesh.scale.copy(target.startScale).multiplyScalar(1 - t);
+
+            if (target.age >= target.lifetime) {
+                if (target.mesh.parent) {
+                    target.mesh.parent.remove(target.mesh);
+                }
+                this.dyingTargets.splice(i, 1);
             }
         }
     }

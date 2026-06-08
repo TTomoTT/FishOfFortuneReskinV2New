@@ -2,9 +2,6 @@
 // Core setup & utilities
 // =========================
 
-
-
-
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { InstancedFlow } from 'three/addons/modifiers/CurveModifier.js';
@@ -21,28 +18,28 @@ const SOUND_ASSETS = {
 };
 
 const PROJECTILE_SETTINGS = {
-    radius: 0.05,          // Base size of the projectile
-    stretchFactor: 2.0,    // How long the "blur" streak is
-    thicknessFactor: 0.7,  // How thin the projectile is relative to radius
-    speedBase: 5.0,        // Increased travel speed
-    speedRandom: 3.0       // Random variance
+    radius: 0.05,          
+    stretchFactor: 2.0,    
+    thicknessFactor: 0.7,  
+    speedBase: 5.0,        
+    speedRandom: 3.0       
 };
 
-const PATH_SPEED = 0.2;    // Shared traversal speed for both Boards and Arrows
-const PATH_START_OFFSET = 0.05; // Boards/Plates start at 5% into the curve
+const PATH_SPEED = 0.2;    
+const PATH_START_OFFSET = 0.05; 
 
 const ARROW_SETTINGS = {
     count: 18,
-    baseOpacity: 0.7,      // Increased to make them stand out
-    fadeZone: 0.03,        // Percentage of the path (0.0 to 1.0) for fading at start/end
-    color: 0xD8B4FE        // Arrow color (Light purple)
+    baseOpacity: 0.7,      
+    fadeZone: 0.03,        
+    color: 0xD8B4FE        
 };
 
 const COMBAT_STANCE_SETTINGS = {
-    delayMin: 0.01,         // Min time before rotating to shoot
-    delayMax: 1.0,         // Max time before rotating to shoot
-    durationMin: 20,       // Min time spent shooting
-    durationMax: 30        // Max time spent shooting
+    delayMin: 0.01,         
+    delayMax: 1.0,         
+    durationMin: 20,       
+    durationMax: 30        
 };
 
 function randomRange(min, max) {
@@ -79,7 +76,7 @@ class SceneManager {
         this.renderer.shadowMap.type = THREE.PCFShadowMap;
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 0.7; // Slightly lowered to balance noon light and contrast
+        this.renderer.toneMappingExposure = 0.7; 
 
         this.timer = new THREE.Timer();
 
@@ -90,7 +87,7 @@ class SceneManager {
     }
 
     _setupCamera() {
-        const frustumSize = 5.0; // Increased to prevent objects being cut off at screen edges
+        const frustumSize = 5.0; 
         const aspect = this.sizes.width / this.sizes.height;
 
         this.camera = new THREE.OrthographicCamera(
@@ -102,7 +99,7 @@ class SceneManager {
             50
         );
 
-        this.camera.position.set(0, 2, 1.5); // Moved back to prevent clipping projectiles at the start
+        this.camera.position.set(0, 2, 1.5); 
         this.camera.up.set(0, 0, -1);
         this.camera.lookAt(0, 0, 0.3);
     }
@@ -113,20 +110,13 @@ class SceneManager {
     }
 
     _setupLights() {
-        // 1. High-angle Main Light (Sun)
-        // The image has short but distinct shadows pointing down and slightly left.
-        // We position the light high, slightly to the front and right side.
-        const sun = new THREE.DirectionalLight(0xffffff, 4.2); // Bright white noon sun
+        const sun = new THREE.DirectionalLight(0xffffff, 4.2); 
         sun.castShadow = true;
         sun.position.set(5, 12, 1); 
         
-        // 2. Optimized Soft Shadow Map Settings
-        // Tighten the shadow camera view area to cover just your board. 
-        // This stops shadows from looking pixelated or vanishing.
-        sun.shadow.mapSize.width = 2048; // Higher res for clean block edges
+        sun.shadow.mapSize.width = 2048; 
         sun.shadow.mapSize.height = 2048;
         
-        // Tighten the shadow camera frustum bounds (Adjust numbers based on your board size)
         sun.shadow.camera.near = 0.5;
         sun.shadow.camera.far = 25;
         sun.shadow.camera.left = -10;
@@ -134,18 +124,14 @@ class SceneManager {
         sun.shadow.camera.top = 10;
         sun.shadow.camera.bottom = -10;
         
-        // Smooth out jagged shadow edges
         sun.shadow.bias = -0.0005; 
         sun.shadow.normalBias = 0.05; 
         this.scene.add(sun);
         this.sun = sun;
 
-        // 3. Stylized Soft Ambient Fill Light
-        // The shadows in your screenshot aren't pitch black; they have a soft, purple-blue tint.
-        // A HemisphereLight creates a beautiful sky/ground ambient blend.
-        const ambientSkyColor = 0xdce2f0;   // Clean bright sky blue
-        const ambientGroundColor = 0x5a557a; // Soft purple-gray shadow filler
-        const ambientLight = new THREE.HemisphereLight(ambientSkyColor, ambientGroundColor, 1.3); // Ambient fill for shadows
+        const ambientSkyColor = 0xdce2f0;   
+        const ambientGroundColor = 0x5a557a; 
+        const ambientLight = new THREE.HemisphereLight(ambientSkyColor, ambientGroundColor, 1.3); 
         this.scene.add(ambientLight);
     }
 
@@ -225,6 +211,30 @@ function createRoundedBoxGeometry(width, height, depth, radius, segments = 12) {
     return geometry;
 }
 
+function applyOutline(object, thickness = 0.01) {
+    if (!object) return;
+    object.traverse((child) => {
+        if (child.isMesh && !child.name.includes('outline') && child.name !== 'raycast_collider' && child.name !== 'shot_counter') {
+            const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+            outlineMat.onBeforeCompile = (shader) => {
+                shader.uniforms.thickness = { value: thickness };
+                shader.vertexShader = `
+                    uniform float thickness;
+                    ${shader.vertexShader.replace(
+                        '#include <begin_vertex>',
+                        '#include <begin_vertex>\ntransformed += normal * thickness;'
+                    )}
+                `;
+            };
+            const outlineMesh = new THREE.Mesh(child.geometry, outlineMat);
+            outlineMesh.name = child.name + '_outline';
+            outlineMesh.castShadow = false;
+            outlineMesh.receiveShadow = false;
+            child.add(outlineMesh);
+        }
+    });
+}
+
 function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
     const rows = 1;
     const cols = 6;
@@ -256,7 +266,7 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
     }));
 
     const smallSize = tileWidth * 0.35;
-    const cubeHeight = smallSize * 2; // Tall pillars to reach the height of the projectiles
+    const cubeHeight = smallSize * 2; 
     const gap = tileWidth * 0.01;
     const offsetAmount = (smallSize / 2) + (gap / 2);
     const smallGeom = createRoundedBoxGeometry(smallSize, cubeHeight, smallSize, smallSize * 0.12, 4);
@@ -284,7 +294,6 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
                         y + cubeHeight / 2 + extraLift,
                         baseZ + offsetZ
                     );
-                    // Tag white cubes for selective collision
                     mesh.userData.isWhite = isWhite;
                     group.add(mesh);
                     cubes.push(mesh);
@@ -319,25 +328,22 @@ function createShotCounter(maxShots = 20, showTotal = false) {
         side: THREE.DoubleSide
     });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2; // lie flat above the board
-    mesh.position.y = 0.15;         // float above board surface
+    mesh.rotation.x = -Math.PI / 2; 
+    mesh.position.y = 0.15;         
 
     function update(shotsLeft) {
         ctx.clearRect(0, 0, 128, 64);
         
-        // Only draw text if shotsLeft > 0, or if we are showing a total (like 0 / 5)
         if (shotsLeft > 0 || showTotal) {
             const text = showTotal ? `${shotsLeft} / ${maxShots}` : `${shotsLeft}`;
             ctx.font = showTotal ? 'bold 28px sans-serif' : 'bold 36px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Draw black outline
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 5;
             ctx.strokeText(text, 64, 32);
 
-            // Draw main text fill
             ctx.fillStyle = (showTotal || shotsLeft > 5) ? '#ffffff' : '#ff4444';
             ctx.fillText(text, 64, 32);
         }
@@ -345,9 +351,7 @@ function createShotCounter(maxShots = 20, showTotal = false) {
         texture.needsUpdate = true;
     }
 
-
     update(maxShots);
-
     return { mesh, update };
 }
 
@@ -363,13 +367,12 @@ class ProjectileSystem {
         this.projectiles = [];
         this.particles = [];
         this.spatialGrid = new Map();
-        this.gridCellSize = 0.5; // Adjusted based on cube spacing
+        this.gridCellSize = 0.5; 
 
-        this.burstFireRate = 0.06;       // Faster delay between shots WITHIN a burst
-        this.betweenBurstDelayMin = 0.4; // Shorter minimum time between bursts
-        this.betweenBurstDelayMax = 1.0; // Shorter maximum time between bursts
+        this.burstFireRate = 0.06;       
+        this.betweenBurstDelayMin = 0.4; 
+        this.betweenBurstDelayMax = 1.0; 
 
-        // Pre-create shared geometry for performance
         this.sharedGeometry = new THREE.SphereGeometry(PROJECTILE_SETTINGS.radius, 16, 16);
 
         this.audioLoader = new THREE.AudioLoader();
@@ -394,7 +397,6 @@ class ProjectileSystem {
         if (!this.impactBuffer) return;
         const sound = new THREE.Audio(this.audioListener);
         sound.setBuffer(this.impactBuffer);
-        // Randomize volume and add a tiny staggered delay to separate overlapping hits
         sound.setVolume(0.2 + Math.random() * 0.2);
         const stagger = Math.random() * 0.05; 
         setTimeout(() => {
@@ -488,7 +490,6 @@ class ProjectileSystem {
             const particle = new THREE.Mesh(geometry, material);
             particle.position.copy(position);
             
-            // Random velocity direction
             const velocity = new THREE.Vector3(
                 (Math.random() - 0.5) * 4,
                 (Math.random() - 0.5) * 4,
@@ -506,20 +507,17 @@ class ProjectileSystem {
     }
 
     spawnFromBoard(board, count = 1) {
-        // Check and decrement shot counter
         if (board.userData.shotsLeft !== undefined) {
             if (board.userData.shotsLeft <= 0) return;
             board.userData.shotsLeft -= count;
             board.userData.counter?.update(board.userData.shotsLeft);
         }
 
-        // Initialize recoil vector if it doesn't exist
         if (!board.userData.recoilVector) {
             board.userData.recoilVector = new THREE.Vector3();
         }
 
         for (let i = 0; i < count; i++) {
-            // We reuse the shared geometry, but create a unique material for per-projectile fading
             const sphereMaterial = new THREE.MeshStandardMaterial({
                 color:  0xffffff,
                 emissive: 0xffffff,
@@ -537,7 +535,6 @@ class ProjectileSystem {
             const boardWorldXAxis = new THREE.Vector3(0, 0, -1);
             boardWorldXAxis.applyQuaternion(board.quaternion);
 
-            // Add recoil impulse (only for standard boards, skip for plates)
             if (!board.name.toLowerCase().includes('plate')) {
                 const recoilStrength = 0.05;
                 board.userData.recoilVector.add(boardWorldXAxis.clone().multiplyScalar(-recoilStrength));
@@ -546,7 +543,6 @@ class ProjectileSystem {
             const offsetDist = 0.15 + Math.random() * 0.1;
             sphere.position.add(boardWorldXAxis.clone().multiplyScalar(offsetDist));
 
-            // Align the mesh to travel direction and stretch it to simulate motion blur
             sphere.lookAt(sphere.position.clone().add(boardWorldXAxis));
             sphere.scale.set(
                 PROJECTILE_SETTINGS.thicknessFactor, 
@@ -602,7 +598,6 @@ class ProjectileSystem {
             this.processFiring(delta, board, xFollowActive);
         }
         
-        // Rebuild the grid once per frame if there are projectiles to process
         if (this.projectiles.length > 0) {
             this._updateSpatialGrid();
         }
@@ -616,7 +611,6 @@ class ProjectileSystem {
             const gx = Math.floor(proj.mesh.position.x / this.gridCellSize);
             const gz = Math.floor(proj.mesh.position.z / this.gridCellSize);
 
-            // Check current and 8 neighboring cells
             for (let x = gx - 1; x <= gx + 1 && !destroyed; x++) {
                 for (let z = gz - 1; z <= gz + 1 && !destroyed; z++) {
                     const cell = this.spatialGrid.get(`${x},${z}`);
@@ -626,13 +620,11 @@ class ProjectileSystem {
                         const cube = cell[j];
                         const distSq = proj.mesh.position.distanceToSquared(cube.position);
                         
-                        // Using squared distance (0.35 * 0.35 = 0.1225) to avoid Math.sqrt()
                         if (distSq < 0.1225) {
                             if (proj.isWhite === cube.userData.isWhite) {
                                 this._createExplosion(cube.position.clone());
                                 this.checkerboardGroup.remove(cube);
                                 
-                                // Also remove from the master array
                                 const masterCubes = this.checkerboardGroup.userData.cubes;
                                 const idx = masterCubes.indexOf(cube);
                                 if (idx !== -1) masterCubes.splice(idx, 1);
@@ -655,7 +647,6 @@ class ProjectileSystem {
             }
             if (destroyed) continue;
 
-            // ===== FADE & LIFETIME =====
             const fadeStart = proj.lifetime * 0.7;
             if (proj.age > fadeStart) {
                 const fadeAlpha = 1 - (proj.age - fadeStart) / (proj.lifetime - fadeStart);
@@ -670,7 +661,6 @@ class ProjectileSystem {
             }
         }
 
-        // ===== UPDATE PARTICLES (Explosions) =====
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const p = this.particles[i];
             p.age += delta;
@@ -741,7 +731,8 @@ class BoardQueue {
             this.scene.add(this.queueCounter.mesh);
         }
 
-        this._createInitialQueue(initialCount);
+        // CHANGE THIS LINE FROM count TO initialCount:
+        this._createInitialQueue(initialCount); 
     }
 
     _attachCounter(board) {
@@ -755,15 +746,18 @@ class BoardQueue {
     _applyBoardMaterial(board, isWhite) {
         board.traverse(child => {
             if (child.isMesh && child.name !== 'raycast_collider' && child.name !== 'shot_counter') {
+                if (!child.material || Array.isArray(child.material) || !child.material.color) {
+                    return;
+                }
+
                 if (this.preserveTexture) {
-                    // Clone the original material to keep the texture, but tint the color
                     child.material = child.material.clone();
                     if (isWhite) {
-                        child.material.color.set(0xffffff); // Keep original texture colors
-                        child.material.emissive.set(0x333333); // Add glow to make it "whiter"
+                        child.material.color.set(0xffffff); 
+                        if (child.material.emissive) child.material.emissive.set(0x333333);
                     } else {
-                        child.material.color.set(0x888888); // Moderate grey tint to darken the texture
-                        child.material.emissive.set(0x000000);
+                        child.material.color.set(0x888888); 
+                        if (child.material.emissive) child.material.emissive.set(0x000000);
                     }
                 } else {
                     child.material = isWhite ? this.whiteMaterial : this.blackMaterial;
@@ -779,6 +773,10 @@ class BoardQueue {
             const pos = this.queueOrigin.clone().add(offset);
             boardClone.position.copy(pos);
             boardClone.visible = true;
+
+            if (this.isPlate) {
+                boardClone.material = this.templateBoard.material;
+            }
 
             if (!this.isPlate) {
                 this._attachCounter(boardClone);
@@ -802,7 +800,6 @@ class BoardQueue {
     }
 
     startReposition() {
-        // Cancel manual forward sliding if we start a standard repositioning
         this.repositioning = false;
 
         this.repositionStart = [];
@@ -849,7 +846,6 @@ class BoardQueue {
     }
 
     spawnNewBoardAtEnd(baseBoardDefaultQuaternion, baseBoardDefaultRotation) {
-        // Calculate spawn position: one slot FURTHER than the current end of the queue
         const spawnOffset = this.queueDirection.clone().multiplyScalar(this.spacing * (this.boards.length + 1));
         const spawnPosition = this.queueOrigin.clone().add(spawnOffset);
 
@@ -858,6 +854,10 @@ class BoardQueue {
         newBoard.quaternion.copy(baseBoardDefaultQuaternion);
         newBoard.rotation.copy(baseBoardDefaultRotation);
         newBoard.visible = true;
+
+        if (this.isPlate) {
+            newBoard.material = this.templateBoard.material;
+        }
 
         if (!this.isPlate) {
             this._attachCounter(newBoard);
@@ -870,7 +870,6 @@ class BoardQueue {
         this.scene.add(newBoard);
         this.boards.push(newBoard);
         
-        // Trigger lerp for all boards (including the new one) to their correct slots
         this.startReposition();
         if (this.isPlate) this.updateQueueCounters();
     }
@@ -888,7 +887,7 @@ class CurveFollower {
         this.boardJumpDuration = 0.4;
         this.boardJumpHeight = this.isPlate ? 0 : 0.8;
 
-        this.boardReturnDuration = 0.7; // Fast speed for linked Plate return
+        this.boardReturnDuration = 0.7; 
         this.boardDyingDuration = 0.5;
 
         this.BOARD_X_FOLLOW_DELAY_MIN = COMBAT_STANCE_SETTINGS.delayMin;
@@ -901,7 +900,6 @@ class CurveFollower {
         this.plateReturnStartQuat = new THREE.Quaternion();
         this.plateReturnT = 0;
 
-        // Initialize state variables for tracking the active board and its animation state
         this.activeMovingBoard = null;
         this.boardJumping = false;
         this.boardFollowing = false;
@@ -922,7 +920,6 @@ class CurveFollower {
         this.boardPathT = 0;
         this.pendingJumps = 0;
 
-        // Store the local offset required to keep the Plate lying flat (90 deg Z-tilt)
         this.plateLocalOffset = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
 
         this.plateJumpStartPos = new THREE.Vector3();
@@ -991,13 +988,11 @@ class CurveFollower {
     }
 
     startJump(defQuat, defRot) {
-        if (this.isPlate) return; // Only standard boards initiate a linked jump cycle now
+        if (this.isPlate) return; 
         if (this.boardQueue.boards.length === 0) return;
 
-        // Prevent starting a new jump if the current follower instance is already busy
         if (this.activeMovingBoard || this.boardJumping || this.boardFollowing || this.boardReturning || this.plateReturning) return;
 
-        // Request a plate from the shared plate system to link with this board
         if (this.plateSystemRef && this.plateSystemRef.q.boards.length > 0) {
             this.activePlate = this.plateSystemRef.q.boards.shift();
             this.plateSystemRef.q.updateQueueCounters();
@@ -1007,7 +1002,6 @@ class CurveFollower {
             this.plateJumpStartQuat.copy(this.activePlate.quaternion);
         }
 
-        // Play the swoosh sound effect when the board is activated
         this.projectileSystem.playSwoosh();
 
         const board = this.boardQueue.boards.shift();
@@ -1017,7 +1011,6 @@ class CurveFollower {
             this.boardQueue.updateQueueCounters();
             this.boardQueue.startReposition();
         } else {
-            // Refill standard board queue immediately and slide
             this.boardQueue.spawnNewBoardAtEnd(defQuat, defRot);
         }
 
@@ -1034,17 +1027,11 @@ class CurveFollower {
         this.boardXFollowDuration = randomRange(this.BOARD_X_FOLLOW_DUR_MIN, this.BOARD_X_FOLLOW_DUR_MAX);
         this.boardXFollowTimer = randomRange(this.BOARD_X_FOLLOW_DELAY_MIN, this.BOARD_X_FOLLOW_DELAY_MAX);
 
-        // Reset orientation state for the new board
         this.orientationLerp = 0;
         this.inCombatStance = false;
     }
 
     update(delta, baseBoardDefaultQuaternion, baseBoardDefaultRotation) {
-        // Ensure projectiles and particles update even if no board is active on the curve
-        
-        // Reduced padding so shooting starts almost immediately after the rotation finishes.
-        // We keep a small start padding (0.4s) and a larger end padding (1.0s) 
-        // so it stops shooting before rotating back.
         const startPadding = 0.4;
         const endPadding = 1.0;
         const canShoot = this.boardXFollowActive && 
@@ -1053,7 +1040,6 @@ class CurveFollower {
 
         this.projectileSystem.update(delta, this.activeMovingBoard, canShoot);
 
-        // Handle Linked Plate returning logic
         if (this.plateReturning && this.activePlate) {
             this.plateReturnT += delta / this.boardReturnDuration;
             const t = Math.min(this.plateReturnT, 1);
@@ -1079,7 +1065,6 @@ class CurveFollower {
 
         const activeBoard = this.activeMovingBoard;
 
-        // Trigger dying sequence when shots run out
         if (activeBoard && activeBoard.userData.shotsLeft === 0 && !this.boardDying && (this.boardFollowing || this.boardJumping)) {
             this.boardDying = true;
             this.boardDyingT = 0;
@@ -1089,7 +1074,6 @@ class CurveFollower {
             this._startPlateReturn();
         }
 
-        // Handle scale-down animation and destruction
         if (this.boardDying) {
             this.boardDyingT += delta / this.boardDyingDuration;
             const scaleFactor = Math.max(0, 1 - this.boardDyingT);
@@ -1100,7 +1084,7 @@ class CurveFollower {
                 this.boardFollowing = false;
                 this.boardJumping = false;
                 activeBoard.visible = false;
-                activeBoard.scale.setScalar(1); // Reset for pool/clone safety
+                activeBoard.scale.setScalar(1); 
 
                 this.boardQueue.finishAndRespawn(activeBoard);
                 this.activeMovingBoard = null;
@@ -1122,7 +1106,6 @@ class CurveFollower {
 
             if (this.activePlate && !this.plateReturning) {
                 this.activePlate.position.lerpVectors(this.plateJumpStartPos, this.boardJumpEnd, ease);
-                // Separate Plate jump rotation: slerp from queue to path alignment independently
                 const plateTargetQuat = new THREE.Quaternion();
                 const dummy = new THREE.Object3D();
                 this._alignBoardY(dummy, PATH_START_OFFSET);
@@ -1130,13 +1113,11 @@ class CurveFollower {
                 this.activePlate.quaternion.slerpQuaternions(this.plateJumpStartQuat, plateTargetQuat, ease);
             }
 
-            // Apply and decay recoil offset to the Board AFTER Plate has copied the stable position
             if (activeBoard.userData.recoilVector) {
                 activeBoard.position.add(activeBoard.userData.recoilVector);
                 activeBoard.userData.recoilVector.multiplyScalar(Math.max(0, 1 - delta * 15));
             }
 
-            // Smoothly rotate from initial queue orientation to curve orientation
             const targetQuat = new THREE.Quaternion();
             const pos0 = this.curve.getPointAt(PATH_START_OFFSET);
             const pos1 = this.curve.getPointAt(PATH_START_OFFSET + 0.01);
@@ -1181,19 +1162,16 @@ class CurveFollower {
 
             if (this.activePlate && !this.plateReturning) {
                 this.activePlate.position.copy(activeBoard.position);
-                // Separate Plate follow logic: maintain flat path alignment regardless of board stance/wobble
                 const dummy = new THREE.Object3D();
                 this._alignBoardY(dummy, this.boardPathT);
                 this.activePlate.quaternion.copy(dummy.quaternion).multiply(this.plateLocalOffset);
             }
 
-            // Apply and decay recoil offset to the Board AFTER Plate has copied the stable position
             if (activeBoard.userData.recoilVector) {
                 activeBoard.position.add(activeBoard.userData.recoilVector);
                 activeBoard.userData.recoilVector.multiplyScalar(Math.max(0, 1 - delta * 15));
             }
 
-            // X-follow timing logic
             if (!this.boardXFollowActive) {
                 this.boardXFollowTimer -= delta;
                 if (this.boardXFollowTimer <= 0) {
@@ -1231,9 +1209,7 @@ class CurveFollower {
 
         }
 
-        // Apply orientation logic if the board is active and not jumping
         if (activeBoard && !this.boardJumping) {
-            // Once firing starts, or if dying, we want the side-facing (X) orientation
             if (this.boardXFollowActive || this.boardDying) {
                 this.inCombatStance = true;
             }
@@ -1252,7 +1228,6 @@ class CurveFollower {
 
             activeBoard.quaternion.slerpQuaternions(quatDefault, quatFiring, this.orientationLerp);
 
-            // Reduce wobble intensity when not firing to make the curve-following orientation clearer
             const currentWobbleMax = this.boardXFollowActive ? 1.2 : 0.05;
             this.wobbleRotation = THREE.MathUtils.lerp(this.wobbleRotation, (Math.random() - 0.5) * currentWobbleMax, delta * 2);
             activeBoard.rotateY(this.wobbleRotation);
@@ -1298,7 +1273,6 @@ class ArrowIndicator {
                     varying vec2 vUv;
                     void main() {
                         vec4 texColor = texture2D(uTexture, vUv);
-                        // Use the texture's alpha channel to define the shape, but use uColor for the pixels
                         gl_FragColor = vec4(uColor, texColor.a * uOpacity);
                     }
                 `,
@@ -1316,11 +1290,9 @@ class ArrowIndicator {
         this.tOffset = (this.tOffset + delta * this.speed) % 1;
 
         for (let i = 0; i < this.count; i++) {
-            // Spacing logic: (animation_progress + index / total_count) % 1
             const t = (this.tOffset + i / this.count) % 1;
             const mesh = this.arrows[i];
 
-            // Calculate opacity: fade in at the start and out at the end of the curve
             let opacity = this.baseOpacity;
             if (t < this.fadeZone) {
                 opacity = (t / this.fadeZone) * this.baseOpacity;
@@ -1331,11 +1303,11 @@ class ArrowIndicator {
 
             const pos = this.curve.getPointAt(t);
             mesh.position.copy(pos);
-            mesh.position.y += 0.01; // Slightly above the curve line to avoid Z-fighting
+            mesh.position.y += 0.01; 
 
             const lookTarget = this.curve.getPointAt((t + 0.01) % 1);
             mesh.lookAt(lookTarget);
-            mesh.rotateX(Math.PI / 2); // Rotate to lay flat on the path
+            mesh.rotateX(Math.PI / 2); 
         }
     }
 }
@@ -1414,59 +1386,82 @@ function initExperience(points) {
                 child.receiveShadow = true;
             }
 
+            // --- STYLIZED CODROPS WATER SHADER APPLIED ON FLOOR OBJECT ---
             if (child.isMesh && (child.name === 'Floor' || child.name.toLowerCase().includes('floor'))) {
-                const floorWater = new Water(
-                    child.geometry,
-                    {
-                        textureWidth: 512,
-                        textureHeight: 512,
-                        waterNormals: new THREE.TextureLoader().load('GameObjects/waternormals.jpg', (texture) => {
-                            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                        }),
-                        sunDirection: sceneManager.sun.position.clone().normalize(),
-                        sunColor: 0xffffff,
-                        waterColor: 0x99e5ff,
-                        distortionScale: 7.0,
-                        fog: sceneManager.scene.fog !== undefined,
-                        alpha: 0.6,
-                        side: THREE.DoubleSide
-                    }
-                );
+                const stylizedWaterMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0.0 },
+                        uColorShallow: { value: new THREE.Color(0x2ce2ff) }, // Bright turquoise depth color
+                        uColorDeep: { value: new THREE.Color(0x0a5175) },    // Deep ocean base gradient
+                        uColorFoam: { value: new THREE.Color(0xffffff) }     // Vibrant cell-shaded white foam lines
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        varying vec3 vPosition;
+                        void main() {
+                            vUv = uv;
+                            vPosition = position;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float time;
+                        uniform vec3 uColorShallow;
+                        uniform vec3 uColorDeep;
+                        uniform vec3 uColorFoam;
+                        varying vec2 vUv;
+                        varying vec3 vPosition;
 
-                // Copy UV-based flow logic from StreamBelt
-                floorWater.material.onBeforeCompile = (shader) => {
-                    shader.vertexShader = shader.vertexShader.replace(
-                        'varying vec4 worldPosition;',
-                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
-                    );
-                    shader.vertexShader = shader.vertexShader.replace(
-                        'void main() {',
-                        'void main() {\nvUv = uv;'
-                    );
-                    shader.fragmentShader = shader.fragmentShader.replace(
-                        'varying vec4 worldPosition;',
-                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
-                    );
-                    shader.fragmentShader = shader.fragmentShader.replace(
-                        'vec4 noise = getNoise( worldPosition.xz * size );',
-                        'vec4 noise = getNoise( vUv * size );'
-                    );
-                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103.0/g, 'uv * -0.1');
-                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107.0/g, 'uv * -0.1');
-                };
+                        // Procedural 2D Noise function for zero texture load dependencies
+                        float hash(vec2 p) {
+                            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+                        }
+                        float noise(vec2 p) {
+                            vec2 i = floor(p);
+                            vec2 f = fract(p);
+                            vec2 u = f * f * (3.0 - 2.0 * f);
+                            return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+                                       mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
+                        }
 
-                floorWater.material.transparent = true;
-                floorWater.material.uniforms['size'].value = 4.0;
+                        void main() {
+                            // Scale up and animate multi-directional vectors for moving current ripples
+                            vec2 uv1 = vUv * 6.5 + vec2(time * 0.04, time * 0.03);
+                            vec2 uv2 = vUv * 11.0 - vec2(time * 0.02, time * -0.03);
 
-                child.updateMatrixWorld(true);
-                child.matrixWorld.decompose(floorWater.position, floorWater.quaternion, floorWater.scale);
-                
-                sceneManager.scene.add(floorWater);
-                waterObjects.push(floorWater);
-                child.visible = false;
+                            float n1 = noise(uv1);
+                            float n2 = noise(uv2);
+                            float combinedNoise = (n1 + n2) * 0.5;
+
+                            // Calculate stylized water baseline gradient mapping
+                            vec3 waterColor = mix(uColorDeep, uColorShallow, combinedNoise);
+
+                            // Create sharp cell-shaded stylized wave foam thresholds 
+                            float foamCutoff = 0.56;
+                            float foamWidth = 0.03;
+                            float foamEdge = smoothstep(foamCutoff, foamCutoff + foamWidth, combinedNoise);
+                            
+                            // Fine secondary interior ripples
+                            float rippleEdge = smoothstep(0.40, 0.42, combinedNoise) * smoothstep(0.45, 0.43, combinedNoise);
+
+                            vec3 finalColor = mix(waterColor, uColorFoam, foamEdge);
+                            finalColor += rippleEdge * uColorFoam * 0.35; // Overlay ambient secondary waves
+
+                            gl_FragColor = vec4(finalColor, 0.9);
+                        }
+                    `,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+
+                // Directly swap material to enforce styling changes safely on the loaded asset
+                child.material = stylizedWaterMaterial;
+                child.visible = true; 
+
+                // Track mesh directly in update loop to step forward shader timelines safely
+                waterObjects.push(child); 
             }
 
-            // Identify the board object. If the board is a group in the GLTF, we want the group.
             if (!boardBaseDefaultSaved && (child.name === 'Board' || child.name.toLowerCase().includes('board'))) {
                 boardBase = child;
                 boardBaseDefaultQuaternion.copy(boardBase.quaternion);
@@ -1481,23 +1476,98 @@ function initExperience(points) {
                 fishBaseDefaultSaved = true;
             }
 
+            // --- PLATE WHIRLWIND WATER SHADER ---
             if (!plateBaseDefaultSaved && (child.name === 'Plate' || child.name.toLowerCase().includes('plate'))) {
-                plateBase = child;
+                const water = new Water(
+                    child.geometry,
+                    {
+                        textureWidth: 512,
+                        textureHeight: 512,
+                        waterNormals: new THREE.TextureLoader().load('GameObjects/waternormals.jpg', (texture) => {
+                            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                        }),
+                        sunDirection: sceneManager.sun.position.clone().normalize(),
+                        sunColor: 0xffffff,
+                        waterColor: 0x99e5ff,
+                        distortionScale: 4.0,
+                        fog: sceneManager.scene.fog !== undefined,
+                        alpha: 0.8,
+                        side: THREE.DoubleSide
+                    }
+                );
+
+                water.material.onBeforeCompile = (shader) => {
+                    shader.vertexShader = shader.vertexShader.replace(
+                        'varying vec4 worldPosition;',
+                        'attribute vec2 uv;\nvarying vec4 worldPosition;\nvarying vec2 vUv;'
+                    );
+                    shader.vertexShader = shader.vertexShader.replace(
+                        'void main() {',
+                        'void main() {\nvUv = uv;'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'varying vec4 worldPosition;',
+                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'vec4 noise = getNoise( worldPosition.xz * size );',
+                        `
+                        vec2 uvSwirl = vUv - 0.5;
+                        float dist = length(uvSwirl);
+                        float angle = atan(uvSwirl.y, uvSwirl.x);
+                        float swirl = angle + (2.5 / (dist + 0.1)) + time * 35.0;
+                        float radialFlow = dist - time * 0.4; 
+                        vec2 swirledUv = vec2(cos(swirl), sin(swirl)) * radialFlow + 0.5;
+                        vec4 noise = getNoise( swirledUv * size );
+                        `
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'gl_FragColor = vec4( albedo, alpha );',
+                        `
+                        float foam = smoothstep(0.12, 0.38, noise.r);
+                        float core = smoothstep(0.35, 0.0, dist);
+                        
+                        vec3 cyanBase = waterColor * 2.5; 
+                        vec3 emissiveWhirl = mix(cyanBase, vec3(35.0), foam); 
+                        emissiveWhirl += core * vec3(20.0, 45.0, 55.0);    
+                        
+                        float finalAlpha = clamp(foam * 0.9 + core * 1.0 + 0.05, 0.0, 1.0) * alpha;
+                        gl_FragColor = vec4( emissiveWhirl, finalAlpha );
+                        `
+                    );
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103\.0/g, 'uv * -0.1');
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107\.0/g, 'uv * -0.1');
+                };
+
+                water.material.transparent = true;
+                water.material.depthWrite = false; 
+                water.name = child.name;
+                water.material.uniforms['size'].value = 1.4;
+
+                child.updateMatrixWorld(true);
+                child.matrixWorld.decompose(water.position, water.quaternion, water.scale);
+
+                plateBase = water;
+                plateBase.receiveShadow = false;
+                plateBase.castShadow = false;
+                waterObjects.push(plateBase); 
+
                 plateBase.updateMatrixWorld(true);
                 plateBase.getWorldPosition(plateWorldOrigin);
                 
-                // Set initial 90 degree rotation on Z axis
-                plateBase.rotateZ(Math.PI / 2);
-
+                plateBase = child;
                 plateBaseDefaultQuaternion.copy(plateBase.quaternion);
                 plateBaseDefaultRotation.copy(plateBase.rotation);
                 plateBaseDefaultSaved = true;
+
+                child.visible = false; 
             }
 
             if (child.isMesh && (child.name === 'Hand' || child.name.toLowerCase().includes('hand'))) {
                 hand = child;
             }
 
+            // --- STREAM BELT WATER SHADER ---
             if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().includes('streambelt'))) {
                 const water = new Water(
                     child.geometry,
@@ -1508,61 +1578,51 @@ function initExperience(points) {
                             texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
                         }),
                         sunDirection: sceneManager.sun.position.clone().normalize(),
-                        sunColor: 0xffffff, // Pure white highlights for 12h noon sun
-                        waterColor: 0x99e5ff, // Brighter, more saturated cyan for a tropical cartoon look
-                        distortionScale: 7.0, // Increased for more energetic ripples
+                        sunColor: 0xffffff,
+                        waterColor: 0x99e5ff, 
+                        distortionScale: 7.0, 
                         fog: sceneManager.scene.fog !== undefined,
-                        alpha: 0.6, // Reduced for much higher transparency
+                        alpha: 0.6, 
                         side: THREE.DoubleSide
                     }
                 );
                 
-                // Inject UV-based flow logic to make the stream follow the mesh geometry
-                // instead of global world-space coordinates.
                 water.material.onBeforeCompile = (shader) => {
-                    // 1. Pass UVs from Vertex to Fragment shader
                     shader.vertexShader = shader.vertexShader.replace(
                         'varying vec4 worldPosition;',
-                        'varying vec4 worldPosition;\nvarying vec2 vUv;'
+                        'attribute vec2 uv;\nvarying vec4 worldPosition;\nvarying vec2 vUv;'
                     );
                     shader.vertexShader = shader.vertexShader.replace(
                         'void main() {',
                         'void main() {\nvUv = uv;'
                     );
                     
-                    // 2. Receive UVs in Fragment shader
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'varying vec4 worldPosition;',
                         'varying vec4 worldPosition;\nvarying vec2 vUv;'
                     );
                     
-                    // 3. Swap World-Space sampling for UV-Space sampling
                     shader.fragmentShader = shader.fragmentShader.replace(
                         'vec4 noise = getNoise( worldPosition.xz * size );',
                         'vec4 noise = getNoise( vUv * size );'
                     );
 
-                    // 4. Adjust internal noise scaling to look correct in 0-1 UV space
-                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103.0/g, 'uv * -0.1');
-                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107.0/g, 'uv * -0.1');
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 103\.0/g, 'uv * -0.1');
+                    shader.fragmentShader = shader.fragmentShader.replace(/uv \/ 107\.0/g, 'uv * -0.1');
                 };
 
-                water.material.transparent = true; // Enable blending for the alpha value to work
-                water.frustumCulled = false; // Prevent accidental culling
-                
-                // In UV space, 'size' determines how many times the ripples repeat along the belt.
+                water.material.transparent = true;
+                water.frustumCulled = false; 
                 water.material.uniforms[ 'size' ].value = 4.0;
                 
-                // Capture the actual world transform from the GLB hierarchy
                 child.updateMatrixWorld(true);
                 child.matrixWorld.decompose(water.position, water.quaternion, water.scale);
 
-                // Slightly offset to prevent Z-fighting with the floor
                 water.position.y += 0.005;
 
                 sceneManager.scene.add(water);
                 waterObjects.push(water);
-                child.visible = false; // Hide the original static mesh
+                child.visible = false; 
             }
         });
 
@@ -1572,7 +1632,6 @@ function initExperience(points) {
             boardBaseDefaultRotation.copy(boardBase.rotation);
         }
 
-        // Setup Board Collider & Initialization
         {
             glb.scene.updateMatrixWorld(true);
             const aabb = new THREE.Box3().setFromObject(boardBase);
@@ -1582,13 +1641,17 @@ function initExperience(points) {
             aabb.getCenter(center);
 
             const hitboxHeight = 0.4;
-            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
+            const hitboxGeom = new THREE.BoxGeometry(
+                size.x * 1.8, 
+                hitboxHeight, 
+                Math.min(size.z * 1.1, 0.4)
+            );
 
             const hitboxMat = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff00,
                 wireframe: true,
                 transparent: true, 
-                opacity: 0, // Set to 0 to hide debugging wireframe
+                opacity: 0, 
                 depthWrite: false 
             });
             const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
@@ -1597,6 +1660,8 @@ function initExperience(points) {
             boardBase.worldToLocal(center);
             hitbox.position.copy(center);
             boardBase.add(hitbox);
+
+            applyOutline(boardBase, 0.012);
 
             boardBase.traverse(c => {
                 if (c.isMesh) {
@@ -1614,7 +1679,6 @@ function initExperience(points) {
         }
         
         if (fishBase) {
-            // Setup Fish Collider & Initialization
             {
             glb.scene.updateMatrixWorld(true);
             const aabb = new THREE.Box3().setFromObject(fishBase);
@@ -1624,13 +1688,17 @@ function initExperience(points) {
             aabb.getCenter(center);
 
             const hitboxHeight = 0.4;
-            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
+            const hitboxGeom = new THREE.BoxGeometry(
+                size.x * 1.8, 
+                hitboxHeight, 
+                Math.min(size.z * 1.1, 0.4)
+            );
 
             const hitboxMat = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff00,
                 wireframe: true,
                 transparent: true, 
-                opacity: 0, // Set to 0 to hide debugging wireframe
+                opacity: 0, 
                 depthWrite: false 
             });
             const hitbox = new THREE.Mesh(hitboxGeom, hitboxMat);
@@ -1639,6 +1707,8 @@ function initExperience(points) {
             fishBase.worldToLocal(center);
             hitbox.position.copy(center);
             fishBase.add(hitbox);
+
+            applyOutline(fishBase, 0.01);
 
             fishBase.traverse(c => {
                 if (c.isMesh) {
@@ -1657,7 +1727,6 @@ function initExperience(points) {
         }
 
         if (plateBase) {
-            // Setup Plate Collider & Initialization
             {
             glb.scene.updateMatrixWorld(true);
             const aabb = new THREE.Box3().setFromObject(plateBase);
@@ -1667,7 +1736,11 @@ function initExperience(points) {
             aabb.getCenter(center);
 
             const hitboxHeight = 0.4;
-            const hitboxGeom = new THREE.BoxGeometry(size.x * 1.8, hitboxHeight, Math.min(size.z * 1.1, 0.4));
+            const hitboxGeom = new THREE.BoxGeometry(
+                size.x * 1.8, 
+                hitboxHeight, 
+                Math.min(size.z * 1.1, 0.4)
+            );
 
             const hitboxMat = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff00,
@@ -1683,6 +1756,8 @@ function initExperience(points) {
             hitbox.position.copy(center);
             plateBase.add(hitbox);
 
+            applyOutline(plateBase, 0.008);
+
             plateBase.traverse(c => {
                 if (c.isMesh) {
                     c.geometry.computeBoundingBox();
@@ -1697,15 +1772,12 @@ function initExperience(points) {
             }
         }
 
-        // 3. Add the rest of the environment (Floor, etc.)
         sceneManager.scene.add(glb.scene);
 
         const queueOrigin = worldOrigin;
         const queueDirection = new THREE.Vector3(0, 0, 1);
-        const plateQueueDirection = new THREE.Vector3(-0.1, 0, 0);
+        const plateQueueDirection = new THREE.Vector3(-0.6, 0, 0);
         
-        // Instantiate 5 queues in total (the original 2 plus 3 more to the right)
-        // Instantiate queues
         const gameSystems = [];
         const interQueueSpacing = 0.42;
 
@@ -1716,8 +1788,8 @@ function initExperience(points) {
                 plateBase,
                 plateWorldOrigin,
                 plateQueueDirection,
-                0.04,
-                5, // Only 5 plates in queue
+                0.2,
+                5, 
                 0
             );
             const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
@@ -1733,8 +1805,8 @@ function initExperience(points) {
                 queueOrigin.clone().add(new THREE.Vector3(interQueueSpacing * i, 0, 0)),
                 queueDirection,
                 0.5,
-                3, // 3 boards per queue
-                i % 2 // Alternates color starting pattern
+                3, 
+                i % 2 
             );
             const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
             const cf = new CurveFollower(curve, q, ps, plateSystem);
@@ -1751,8 +1823,8 @@ function initExperience(points) {
                     queueDirection,
                     0.5,
                     3,
-                    (i + 1) % 2, // startIndex
-                    true        // preserveTexture: Keep the fish texture and just tint it
+                    (i + 2) % 2, 
+                    true        
                 );
                 const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
                 const cf = new CurveFollower(curve, q, ps, plateSystem);
@@ -1769,20 +1841,16 @@ function initExperience(points) {
         sceneManager.canvas.addEventListener('click', (event) => {
             if (event.button !== 0) return;
 
-            // Browsers block audio context until a user interaction (like a click).
             if (sceneManager.audioListener.context.state === 'suspended') {
                 sceneManager.audioListener.context.resume();
             }
 
             inputController.updatePointerFromEvent(event);
 
-            // Ensure all board positions are current in the physics/raycast engine
             sceneManager.scene.updateMatrixWorld(true);
             inputController.raycaster.setFromCamera(inputController.pointer, sceneManager.camera);
             
-            // Raycast against boards from all queues
             const allBoards = gameSystems.flatMap(sys => sys.q.boards);
-            // Note: Clicks are only detected on Board objects as requested.
 
             const intersects = inputController.raycaster.intersectObjects(allBoards, true);
             
@@ -1798,7 +1866,7 @@ function initExperience(points) {
 
                     if (isPartOfActive) {
                         sys.f.startJump(sys.defQuat, sys.defRot);
-                        break; // Only trigger one board jump per click
+                        break; 
                     }
                 }
             }
@@ -1821,14 +1889,12 @@ function initExperience(points) {
         animate();
     }, undefined, (error) => {
         console.error('CRITICAL ERROR: Could not load FishTank.glb', error);
-        console.warn('Verify that GameObjects/FishTank.glb exists relative to your project root.');
     });
 }
 
 // =========================
-// Usage: provide your curve points
+// Usage: path nodes data
 // =========================
-
 
 const points = [
 new THREE.Vector3(-0.7087, -0.0274, 0.4898),
@@ -1941,6 +2007,5 @@ new THREE.Vector3(-1.1366, 0.1639, -0.3413),
 new THREE.Vector3(-1.1366, 0.1639, -0.1780),
 new THREE.Vector3(-1.1366, 0.1639, -0.0662),
 ];
-
 
 initExperience(points);

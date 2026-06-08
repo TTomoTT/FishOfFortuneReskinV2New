@@ -1476,14 +1476,90 @@ function initExperience(points) {
                 fishBaseDefaultSaved = true;
             }
 
-            // --- PLATE WHIRLWIND WATER SHADER ---
-            // --- PLATE WHIRLWIND WATER SHADER ---
-// --- PLATE TRANSPARENT VORTEX WATER SHADER ---
+            // --- PLATE DIRECTIONAL WAVE SHADER ---
             if (!plateBaseDefaultSaved && (child.name === 'Plate' || child.name.toLowerCase().includes('plate'))) {
                 plateBase = child;
                 plateBaseDefaultQuaternion.copy(plateBase.quaternion);
                 plateBaseDefaultRotation.copy(plateBase.rotation);
                 plateBaseDefaultSaved = true;
+
+                const plateWaveMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0.0 },
+                        uColorShallow: { value: new THREE.Color(0x2ce2ff) }, 
+                        uColorDeep: { value: new THREE.Color(0x0a5175) },    
+                        uColorFoam: { value: new THREE.Color(0xffffff) },     
+                        uDirection: { value: new THREE.Vector2(1.0, 0.0) } // Direction of waves
+                    },
+                    vertexShader: `
+                        varying vec2 vUv;
+                        varying vec3 vPosition;
+                        void main() {
+                            vUv = uv;
+                            vPosition = position;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float time;
+                        uniform vec3 uColorShallow;
+                        uniform vec3 uColorDeep;
+                        uniform vec3 uColorFoam;
+                        uniform vec2 uDirection;
+                        varying vec2 vUv;
+                        varying vec3 vPosition;
+
+                        // Procedural 2D Noise function
+                        float hash(vec2 p) {
+                            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+                        }
+                        float noise(vec2 p) {
+                            vec2 i = floor(p);
+                            vec2 f = fract(p);
+                            vec2 u = f * f * (3.0 - 2.0 * f);
+                            return mix(mix(hash(i + vec2(0.0,0.0)), hash(i + vec2(1.0,0.0)), u.x),
+                                       mix(hash(i + vec2(0.0,1.0)), hash(i + vec2(1.0,1.0)), u.x), u.y);
+                        }
+
+                        void main() {
+                            // Directional wave movement
+                            vec2 waveDir = normalize(uDirection);
+                            float waveSpeed = 0.5;
+                            
+                            // Moving UVs along direction
+                            vec2 uv1 = vUv * 5.0 - waveDir * time * waveSpeed;
+                            vec2 uv2 = vUv * 8.0 - waveDir * time * waveSpeed * 1.5;
+                            
+                            // Distort slightly perpendicular to direction for organic feel
+                            vec2 perpDir = vec2(-waveDir.y, waveDir.x);
+                            uv1 += perpDir * noise(vUv * 4.0 + time * 0.2) * 0.2;
+                            
+                            float n1 = noise(uv1);
+                            float n2 = noise(uv2);
+                            float combinedNoise = (n1 + n2) * 0.5;
+                            
+                            // Create repeating wave lines
+                            float wave = sin((dot(vUv, waveDir) * 20.0 - time * 2.0) + combinedNoise * 2.0) * 0.5 + 0.5;
+
+                            // Calculate stylized water baseline gradient mapping
+                            vec3 waterColor = mix(uColorDeep, uColorShallow, wave);
+
+                            // Create sharp cell-shaded stylized wave foam thresholds 
+                            float foamCutoff = 0.8;
+                            float foamWidth = 0.05;
+                            float foamEdge = smoothstep(foamCutoff, foamCutoff + foamWidth, wave);
+
+                            vec3 finalColor = mix(waterColor, uColorFoam, foamEdge);
+
+                            gl_FragColor = vec4(finalColor, 0.9);
+                        }
+                    `,
+                    transparent: true,
+                    side: THREE.DoubleSide
+                });
+
+                child.material = plateWaveMaterial;
+                waterObjects.push(child);
             }
 
 

@@ -242,28 +242,12 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
     const startX = -((cols - 1) * spacing) / 2;
     const startZ = -((rows - 1) * spacing) / 2;
 
-    const baseMaterialOptions = {
-        roughness: 0.35,
-        metalness: 0.01,
-        clearcoat: 0.1,
-        clearcoatRoughness: 0.18,
-        envMapIntensity: 0.4,
-        flatShading: true
-    };
-
-    const matWhite = new THREE.MeshPhysicalMaterial(Object.assign({}, baseMaterialOptions, {
-        color: 0xe6e6e6,
-        metalness: 0.1,
-        roughness: 0.3,
-        clearcoat: 0.6,
-        clearcoatRoughness: 0.12,
-        envMapIntensity: 0.55
-    }));
-    const matBlack = new THREE.MeshPhysicalMaterial(Object.assign({}, baseMaterialOptions, {
-        color: 0x111111,
-        roughness: 0.4,
-        metalness: 0.02
-    }));
+    // Invisible hitbox material that perfectly maintains raycast/collision logic
+    const hitboxMat = new THREE.MeshBasicMaterial({ 
+        transparent: true, 
+        opacity: 0, 
+        depthWrite: false 
+    });
 
     const smallSize = tileWidth * 0.35;
     const cubeHeight = smallSize * 2; 
@@ -277,7 +261,6 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
     for (let r = -6; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             const isWhite = ((r + c) % 2 === 0);
-            const mat = isWhite ? matWhite : matBlack;
             const baseX = startX + c * spacing;
             const baseZ = startZ + r * spacing;
             const extraLift = 0;
@@ -286,15 +269,14 @@ function spawnCheckerboard(scene, tileWidth = 0.3, spacing = 0.25, y = 0) {
                 for (let sc = 0; sc < 2; sc++) {
                     const offsetX = offsets[sc];
                     const offsetZ = offsets[sr];
-                    const mesh = new THREE.Mesh(smallGeom, mat);
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
+                    const mesh = new THREE.Mesh(smallGeom, hitboxMat);
                     mesh.position.set(
                         baseX + offsetX,
                         y + cubeHeight / 2 + extraLift,
                         baseZ + offsetZ
                     );
                     mesh.userData.isWhite = isWhite;
+                    mesh.userData.cubeHeight = cubeHeight;
                     group.add(mesh);
                     cubes.push(mesh);
                 }
@@ -1375,6 +1357,31 @@ function initExperience(points) {
     const checkerboardGroup = spawnCheckerboard(sceneManager.scene);
 
     const loader = new GLTFLoader();
+
+    // Load replacements for the checkerboard
+    new THREE.TextureLoader().load('GameObjects/WhiteFly.png', (texture) => {
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        checkerboardGroup.userData.cubes.forEach(cube => {
+            if (cube.userData.isWhite) {
+                const sprite = new THREE.Sprite(material);
+                sprite.position.y = 0.3; // Pull the sprite up toward the camera
+                sprite.scale.set(0.3, 0.3, 0.3); // Adjust scale to fit the tile
+                cube.add(sprite);
+            }
+        });
+    });
+
+    new THREE.TextureLoader().load('GameObjects/BlackBug.png', (texture) => {
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+        checkerboardGroup.userData.cubes.forEach(cube => {
+            if (!cube.userData.isWhite) {
+                const sprite = new THREE.Sprite(material);
+                sprite.position.y = 0.3; // Pull the sprite up toward the camera
+                sprite.scale.set(0.3, 0.3, 0.3); // Adjust scale to fit the tile
+                cube.add(sprite);
+            }
+        });
+    });
 
     loader.load('GameObjects/FishTank.glb', (glb) => {
         console.log('Main model loaded successfully.');

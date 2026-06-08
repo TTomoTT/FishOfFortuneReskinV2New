@@ -727,7 +727,7 @@ class BoardQueue {
         if (this.isPlate) {
             this.queueCounter = createShotCounter(initialCount, true);
             // Position it at the queue origin, slightly elevated above the surface
-            this.queueCounter.mesh.position.copy(this.queueOrigin).add(new THREE.Vector3(0, 0.6, 0.4));
+            this.queueCounter.mesh.position.copy(this.queueOrigin).add(new THREE.Vector3(0, 0.2, 0.4));
             this.scene.add(this.queueCounter.mesh);
         }
 
@@ -753,10 +753,10 @@ class BoardQueue {
                 if (this.preserveTexture) {
                     child.material = child.material.clone();
                     if (isWhite) {
-                        child.material.color.set(0xffffff); 
-                        if (child.material.emissive) child.material.emissive.set(0x333333);
+                        child.material.color.set(0xdddddd); // Slightly darkened texture
+                        if (child.material.emissive) child.material.emissive.set(0x111111);
                     } else {
-                        child.material.color.set(0x888888); 
+                        child.material.color.set(0x666666); // Noticeably darker texture for the opposing color
                         if (child.material.emissive) child.material.emissive.set(0x000000);
                     }
                 } else {
@@ -1231,6 +1231,22 @@ class CurveFollower {
             const currentWobbleMax = this.boardXFollowActive ? 1.2 : 0.05;
             this.wobbleRotation = THREE.MathUtils.lerp(this.wobbleRotation, (Math.random() - 0.5) * currentWobbleMax, delta * 2);
             activeBoard.rotateY(this.wobbleRotation);
+        }
+
+        // Apply dive offset for Fish and its Plate
+        if (activeBoard && !this.isPlate) {
+            let currentDive = 0;
+            if (this.boardJumping) {
+                const t = Math.min(this.boardJumpT, 1);
+                const ease = THREE.MathUtils.smoothstep(t, 0, 1);
+                currentDive = 0.25 * ease; // Dive gracefully into the water upon landing
+            } else {
+                currentDive = 0.25 * (1 - this.orientationLerp); // Surface to fire
+            }
+            activeBoard.position.y -= currentDive;
+            if (this.activePlate && !this.plateReturning) {
+                this.activePlate.position.y -= currentDive;
+            }
         }
     }
 }
@@ -1809,7 +1825,7 @@ if (child.isMesh && (child.name === 'StreamBelt' || child.name.toLowerCase().inc
                     0.5,
                     3,
                     i % 2, 
-                    false        
+                    true        
                 );
                 const ps = new ProjectileSystem(sceneManager.scene, checkerboardGroup, sceneManager.audioListener);
                 const cf = new CurveFollower(curve, q, ps, plateSystem);
